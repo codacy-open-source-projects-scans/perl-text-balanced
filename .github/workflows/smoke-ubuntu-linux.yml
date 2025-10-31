@@ -1,0 +1,87 @@
+name: smoke-ubuntu-linux
+
+on:
+  push:
+    branches:
+      - "*"
+    tags-ignore:
+      - "*"
+  pull_request:
+
+jobs:
+  author-tests:
+    env:
+      AUTHOR_TESTING: 1
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v1
+      - name: perl -V
+        run: perl -V
+      - name: Makefile.PL
+        run: perl Makefile.PL
+      - name: Install cpanm
+        shell: bash
+        run: curl -L https://cpanmin.us | perl - --sudo App::cpanminus
+      - name: author-test deps
+        run: >
+          sudo cpanm
+          Test::CPAN::Changes
+          Test::Perl::Critic
+          Perl::MinimumVersion~1.20
+          Test::MinimumVersion~0.101082
+          Pod::Simple~3.07
+          Test::Pod~1.26
+          Test::Pod::Coverage
+      - name: make test
+        run: make test
+
+  linux:
+    name: "linux ${{ matrix.perl-version }}.${{ matrix.downstream-test }}"
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        perl-version:
+          [
+            "5.32",
+            "5.30",
+            "5.28",
+            "5.26",
+            "5.24",
+            "5.22",
+            "5.20",
+            "5.18",
+            "5.16",
+            "5.14",
+            "5.12",
+            "5.10",
+            "5.8",
+          ]
+        include:
+          - perl-version: '5.30'
+            downstream-test: true
+
+    container:
+      image: perl:${{ matrix.perl-version }}
+
+    steps:
+      - uses: actions/checkout@v1
+      - name: perl -V
+        run: perl -V
+      - name: Install cpanm
+        shell: bash
+        run: curl -L https://cpanmin.us | perl - App::cpanminus
+      - run: cpanm Test::More~0.88
+      - name: Makefile.PL
+        run: perl Makefile.PL
+      - name: make test
+        run: make test
+      - name: downstream test
+        if: "matrix.downstream-test"
+        run: |
+          make install
+          cpanm Switch Inline::Struct || cat ~/.cpanm/build.log
